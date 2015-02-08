@@ -1,0 +1,116 @@
+#! /bin/bash
+
+# subsub
+# A script to swap subtitles between two srt files.
+# Copyright (c) 2014 Ale González
+
+# This software is free; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License version 2.1 as published by the Free Software Foundation. 
+# This software is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Lesser General Public License for more details.
+ 
+# You should have received a copy of the GNU Lesser General
+# Public License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place, Suite 330,
+# Boston, MA 02111-1307 USA
+
+# 
+# help dialog
+#
+function displayHelp()
+{
+cat <<EOF
+        Usage:      subsub [TARGET FILE] [SOURCE FILE]
+        Purpose:    subsub inserts all the subtitles of a srt file (source) in the timeline of other subtitle file (target).
+
+          -h        Show HELP (this output)
+EOF
+}
+
+#
+# getopts
+#
+while getopts :h option
+do
+    case "$option" in
+        h)
+		 displayHelp
+         exit
+	     ;;
+	    *)
+		 echo Invalid option -$OPTARG
+		 echo 
+		 displayHelp
+		 exit 1
+		 ;;
+    esac
+done
+
+#
+# checks
+#
+if [[ $# -ne 2 ]] 
+then
+    echo 'To use subsub you have to pass it two srt subtitle files as arguments.' 
+    displayHelp
+    exit 1 
+fi
+
+if [[ ${1#*.} != 'srt' || ${2#*.} != 'srt' ]]
+then
+    echo 'To use subsub you have to pass it two srt subtitle files as arguments.' 
+    displayHelp
+    exit 1 
+fi
+
+#
+# Convert subtitles to UTF-8 unix files if necessary
+#
+for subtitle
+do
+    file $subtitle | grep 'CRLF' 
+    if [ $? == 0 ] 
+    then 
+        dos2unix $subtitle 
+    fi
+    #Check ISO files and converts them to UTF-8
+    file $subtitle | grep 'ISO-8859' 
+    if [ $? == 0 ] 
+    then
+        iconv $subtitle --from ISO-8859-1 --to UTF-8 > temp.srt
+        cat temp.srt > $subtitle && rm temp.srt
+    fi
+done
+
+
+#
+# Read subtitles from source file and stores them in an array
+# 
+i=0
+emptylines='^\s*$'
+indices='^[0-9]*\s*$'
+timemarkers='^[0-9]{2}\:[0-9]{2}\:[0-9]{2}' 
+
+while read l
+do
+  if [[ ( $l =~  $indices ) || ( $l =~ $timemarkers ) ]]; then continue; fi
+  subs[${i}]=${l}
+  let i=i+1
+done < $2
+
+#
+# Create the subtitle file
+#
+newsubs=${1%.*}-s8.srt
+let i=0
+while read l
+do
+  if [[  ( $l =~  $indices ) || ( $l =~ $timemarkers ) ]]; 
+    then echo $l >> $newsubs
+    else echo ${subs[${i}]} >> $newsubs
+  fi
+  let i=i+1
+done < $1
